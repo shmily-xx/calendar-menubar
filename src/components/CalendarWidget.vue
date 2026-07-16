@@ -35,6 +35,7 @@ function checkDayRollover() {
   refreshSystemForWindow();
 }
 let rolloverTimer = null;
+let unlistenWinFocus = null;
 function onVisibility() {
   if (!document.hidden) checkDayRollover();
 }
@@ -105,27 +106,59 @@ let resizeDebounceTimer = null;
 
 async function adjustWindowHeight() {
   try {
-    const { getCurrentWindow } = await import("@tauri-apps/api/window");
-    const win = getCurrentWindow();
+    const winApi = await import("@tauri-apps/api/window");
+    const win = winApi.getCurrentWindow();
     const widget = document.querySelector('.widget');
     if (!widget) return;
 
-    const rect = widget.getBoundingClientRect();
-    const height = Math.max(400, Math.ceil(rect.height) + 20); // 最小高度400px,额外20px边距
-
+    // 先临时扩大窗口高度，确保内容不被截断，以便准确测量
     const currentSize = await win.innerSize();
-    await win.setSize({ width: currentSize.width, height });
+    await win.setSize({ width: currentSize.width, height: 2000 });
+
+    // 等待布局重排后测量真实内容高度
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const rect = widget.getBoundingClientRect();
+    const height = Math.max(400, Math.ceil(rect.height) + 20);
+
+    // 限制不超过屏幕可用高度
+    let maxHeight = height;
+    try {
+      const mon = await winApi.primaryMonitor();
+      if (mon) {
+        maxHeight = Math.min(height, mon.size.height - 40);
+      }
+    } catch (e) {
+      // 获取屏幕信息失败，不限制
+    }
+
+    const finalHeight = Math.max(400, maxHeight);
+    await win.setSize({ width: currentSize.width, height: finalHeight });
   } catch (e) {
     // 忽略错误(可能在非Tauri环境)
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   rolloverTimer = setInterval(checkDayRollover, 30_000);
   window.addEventListener("focus", checkDayRollover);
   document.addEventListener("visibilitychange", onVisibility);
   if (props.settings.syncSystemCalendar) refreshSystemForWindow();
   watch([year, month], refreshSystemForWindow);
+
+  // 每次窗口从托盘/Dock 打开时回到今天:
+  // 1) useTray 在 show() 后派发的 tray-window-shown(精确信号)
+  window.addEventListener("tray-window-shown", onWindowShown);
+  // 2) 窗口获得焦点时回到今天(更可靠:窗口每次都是 show()+setFocus() 打开,
+  //    且不依赖 useTray 的派发——dev 下改 useTray 不会重跑 App 设置,HMR 会令
+  //    旧闭包的派发失效;监听放在组件自身则不受影响,也覆盖 Dock 路径)
+  try {
+    const winApi = await import("@tauri-apps/api/window");
+    unlistenWinFocus = await winApi.getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+      if (focused) resetToToday();
+    });
+  } catch (e) {
+    /* 非 Tauri 环境(vitest 等) */
+  }
 
   // 监听内容变化,动态调整窗口高度
   resizeObserver = new ResizeObserver(() => {
@@ -142,6 +175,8 @@ onUnmounted(() => {
   if (rolloverTimer) clearInterval(rolloverTimer);
   window.removeEventListener("focus", checkDayRollover);
   document.removeEventListener("visibilitychange", onVisibility);
+  window.removeEventListener("tray-window-shown", onWindowShown);
+  if (unlistenWinFocus) unlistenWinFocus();
   if (resizeObserver) resizeObserver.disconnect();
   if (resizeDebounceTimer) clearTimeout(resizeDebounceTimer);
 });
@@ -149,6 +184,18 @@ onUnmounted(() => {
 function goTodayAndSelect() {
   goToday();
   selectedKey.value = todayKey.value;
+}
+
+// 重置到今天:刷新日期(跨午夜)、跳回本月、选中今天。
+function resetToToday() {
+  refreshToday();
+  goToday();
+  selectedKey.value = todayKey.value;
+}
+
+// 托盘/Dock 打开事件处理。定义在 setup 作用域,onUnmounted 才能正确解绑。
+function onWindowShown() {
+  resetToToday();
 }
 
 // 设置以独立窗口在屏幕中间打开(已存在则聚焦)。

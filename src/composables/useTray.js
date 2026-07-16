@@ -51,6 +51,7 @@ export function useTray(settingsRef) {
     }
     await w.show();
     await w.setFocus();
+    window.dispatchEvent(new CustomEvent("tray-window-shown"));
   }
 
   // 用点击事件里拿到的托盘图标位置，把弹窗定位到图标正下方、右对齐
@@ -87,6 +88,7 @@ export function useTray(settingsRef) {
       winSize = await w.outerSize();
     } catch (e) {
       await w.show();
+      window.dispatchEvent(new CustomEvent("tray-window-shown"));
       return;
     }
     try {
@@ -101,6 +103,7 @@ export function useTray(settingsRef) {
       /* ignore */
     }
     await w.show();
+    window.dispatchEvent(new CustomEvent("tray-window-shown"));
   }
 
   // 失焦延迟隐藏（点别处收起）；可被托盘点击取消

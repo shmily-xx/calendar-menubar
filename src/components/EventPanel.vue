@@ -48,6 +48,11 @@ function cancelEdit() {
   editingId.value = null;
 }
 
+function deleteItem(e) {
+  emit("remove", e.id);
+  editingId.value = null;
+}
+
 function saveEdit() {
   if (!editTitle.value.trim()) return;
   emit("update", {
@@ -141,15 +146,28 @@ async function openPrivacySettings() {
     <!-- 我的事件 -->
     <section v-if="showMyEvents && (myEventsShowEmpty || events.length)" class="section">
       <div class="section-title">我的事件</div>
-      <div v-for="e in events" :key="e.id" class="item local" @click="startEdit(e)">
+      <div
+        v-for="e in events"
+        :key="e.id"
+        class="item local"
+        :class="{ editing: editingId === e.id }"
+        @click="startEdit(e)"
+      >
         <template v-if="editingId === e.id">
-          <input v-model="editTitle" class="edit-title" placeholder="事件标题" @click.stop />
-          <input v-model="editTime" class="edit-time" type="time" @click.stop />
-          <label class="edit-notify" @click.stop>
-            <input type="checkbox" v-model="editNotify" /> 提醒
-          </label>
-          <button class="save-btn" @click.stop="saveEdit">保存</button>
-          <button class="cancel-btn" @click.stop="cancelEdit">取消</button>
+          <div class="edit-row">
+            <input v-model="editTitle" class="edit-title" placeholder="事件标题" @click.stop />
+            <input v-model="editTime" class="edit-time" type="time" @click.stop />
+          </div>
+          <div class="edit-row">
+            <label class="edit-notify" @click.stop>
+              <input type="checkbox" v-model="editNotify" /> 到点提醒
+            </label>
+            <div class="edit-actions">
+              <button class="delete-btn" @click.stop="deleteItem(e)" title="删除">删除</button>
+              <button class="cancel-btn" @click.stop="cancelEdit">取消</button>
+              <button class="save-btn" @click.stop="saveEdit">保存</button>
+            </div>
+          </div>
         </template>
         <template v-else>
           <span class="time">{{ e.time }}</span>
@@ -255,6 +273,23 @@ async function openPrivacySettings() {
 .item.local:hover {
   background: var(--hover);
 }
+.item.editing {
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  cursor: default;
+}
+.edit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+.edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
 .time {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
@@ -345,5 +380,18 @@ async function openPrivacySettings() {
   background: var(--accent);
   color: #fff;
   border-color: var(--accent);
+}
+.delete-btn {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  background: transparent;
+  color: #ef4444;
+  cursor: pointer;
+  font-family: inherit;
+}
+.delete-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
 }
 </style>
