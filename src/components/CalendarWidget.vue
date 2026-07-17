@@ -9,6 +9,8 @@ import { epochStartOfDay, epochEndOfDay } from "../utils/systemCalendar";
 import MonthGrid from "./MonthGrid.vue";
 import EventPanel from "./EventPanel.vue";
 import AddEventPanel from "./AddEventPanel.vue";
+import SettingsWindow from "./SettingsWindow.vue";
+import { isIOS } from "../utils/platform";
 
 const props = defineProps({
   settings: { type: Object, required: true },
@@ -23,6 +25,7 @@ const { data: holidays, refresh } = useHolidays();
 
 const selectedKey = ref(todayKey.value);
 const showAddEvent = ref(false);
+const showSettings = ref(false);
 
 // Cross-midnight rollover: re-read "today" and, if the calendar day changed,
 // move the "今天" highlight along and follow it with the selection if the user
@@ -198,25 +201,34 @@ function onWindowShown() {
   resetToToday();
 }
 
-// 设置以独立窗口在屏幕中间打开(已存在则聚焦)。
+// 设置:桌面开独立窗口;iOS 不支持多 webview,改为同窗口内 inline 显示。
 async function openSettings() {
-  const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
-  const existing = await WebviewWindow.getByLabel("settings");
-  if (existing) {
-    await existing.setFocus();
+  if (isIOS()) {
+    showSettings.value = true;
     return;
   }
-  // 复用当前页面地址(同源),追加 view=settings,兼容 dev 与打包后环境。
-  const url = `${window.location.pathname}?view=settings`;
-  await new WebviewWindow("settings", {
-    url,
-    title: "设置",
-    width: 460,
-    height: 620,
-    resizable: false,
-    minimizable: false,
-    center: true,
-  });
+  try {
+    const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+    const existing = await WebviewWindow.getByLabel("settings");
+    if (existing) {
+      await existing.setFocus();
+      return;
+    }
+    // 复用当前页面地址(同源),追加 view=settings,兼容 dev 与打包后环境。
+    const url = `${window.location.pathname}?view=settings`;
+    await new WebviewWindow("settings", {
+      url,
+      title: "设置",
+      width: 460,
+      height: 620,
+      resizable: false,
+      minimizable: false,
+      center: true,
+    });
+  } catch (e) {
+    // 非 Tauri / 不支持多窗口:回退 inline
+    showSettings.value = true;
+  }
 }
 
 function openAddEvent() {
@@ -278,6 +290,17 @@ function handleAddEvent(event) {
         @close="showAddEvent = false"
       />
     </div>
+
+    <!-- iOS:设置以 inline 覆盖层显示(桌面用独立窗口) -->
+    <div v-if="showSettings" class="settings-overlay">
+      <div class="settings-overlay-inner">
+        <button class="back-btn" @click="showSettings = false">‹ 返回</button>
+        <SettingsWindow
+          :settings="settings"
+          @update="(patch) => $emit('update-settings', patch)"
+        />
+      </div>
+    </div>
   </div>
 </template>
 
@@ -296,4 +319,9 @@ function handleAddEvent(event) {
 :deep(.grid) { padding: 2px 10px 6px; }
 .overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.25); display: flex; justify-content: center; padding-top: 40px; z-index: 10; }
 .overlay > :first-child { width: 100%; background: var(--surface); border-radius: 12px; margin: 0 8px; height: fit-content; box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+
+/* iOS 设置 inline 覆盖层 */
+.settings-overlay { position: absolute; inset: 0; z-index: 20; background: var(--surface); display: flex; flex-direction: column; }
+.settings-overlay-inner { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.back-btn { flex: none; border: none; background: transparent; color: var(--accent); font-family: inherit; font-size: 14px; padding: 10px 14px; text-align: left; cursor: pointer; }
 </style>

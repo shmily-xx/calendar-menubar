@@ -4,27 +4,17 @@
   "version": "0.1.0",
   "identifier": "com.weidie.calendar",
   "build": {
-    "beforeDevCommand": "npm run build:swift && npm run dev",
+    "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build:swift && npm run build",
+    "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
   "app": {
-    "macOSPrivateApi": true,
     "windows": [
       {
         "label": "main",
         "title": "weid",
-        "width": 340,
-        "height": 460,
-        "resizable": false,
-        "decorations": false,
-        "transparent": true,
-        "visible": false,
-        "skipTaskbar": true,
-        "alwaysOnTop": true,
-        "acceptFirstMouse": true,
-        "shadow": false
+        "visible": true
       }
     ],
     "security": {
@@ -41,9 +31,8 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": ["bin/cal-sync"],
-    "macOS": {
-      "infoPlist": "Info.plist"
+    "iOS": {
+      "developmentTeam": "7CRRV6DT4F"
     }
   }
 }
